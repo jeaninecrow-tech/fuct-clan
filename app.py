@@ -9,12 +9,13 @@ st.set_page_config(
 
 @st.cache_data
 def load_data():
-  # Load the Master dataset from your workbook export
-  # Ensure your uploaded file or exported csv is named appropriately
+  # Load directly from the Excel workbook using the MASTER sheet
+  excel_path = "FAFO_Clan_Intel_2026-08-27_2.xlsx"
   try:
-    df = pd.read_csv("FAFO_Clan_Intel_2026-08-27_2.xlsx - MASTER.csv")
-  except Exception:
-    # Fallback placeholder if file path differs locally
+    # Row 0 is the description header, row 1 contains the actual column names in this workbook layout
+    df = pd.read_excel(excel_path, sheet_name="MASTER", header=1)
+  except Exception as e:
+    st.error(f"Error loading Excel file: {e}")
     df = pd.DataFrame()
   return df
 
@@ -31,10 +32,12 @@ st.markdown(
 if df.empty:
   st.warning(
       "Master data file not found or empty. Please ensure"
-      " 'FAFO_Clan_Intel_2026-08-27_2.xlsx - MASTER.csv' is in the working"
-      " directory."
+      " 'FAFO_Clan_Intel_2026-08-27_2.xlsx' is in your repository folder."
   )
 else:
+  # Clean up any potential unnamed columns or empty rows
+  df = df.dropna(subset=["Player"]) if "Player" in df.columns else df
+
   # Sidebar Navigation
   st.sidebar.header("Navigation Menu")
   app_mode = st.sidebar.selectbox(
@@ -65,7 +68,6 @@ else:
   if app_mode == "Dashboard & Scoreboard":
     st.header("📊 Clan Scoreboard & Faction Overview")
 
-    # Faction Filter Switch (simulating your setup)
     faction_filter = st.radio(
         "Filter Faction Switch:",
         ["ALL", "SHADOW", "IMMORTAL", "STANDALONE"],
@@ -82,7 +84,6 @@ else:
             | (filtered_df["Faction"] == "STANDALONE")
         ]
 
-    # Metrics row
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Players in View", len(filtered_df))
     col2.metric("Clans Tracked", filtered_df["Clan"].nunique())
@@ -113,7 +114,6 @@ else:
       )
 
       clan_summary = clan_summary.sort_values(by="Avg_Reso", ascending=False)
-      # Format metrics for clean UI
       clan_summary["Avg_Reso"] = clan_summary["Avg_Reso"].round(0)
       clan_summary["Avg_CR"] = clan_summary["Avg_CR"].round(0)
       clan_summary["Avg_Power"] = clan_summary["Avg_Power"].round(1)
@@ -136,7 +136,10 @@ else:
 
       col1, col2, col3 = st.columns(3)
       col1.metric("Clan", p_data.get("Clan", "N/A"))
-      col2.metric("Class / Role", f"{p_data.get('Class', 'N/A')} ({p_data.get('Role', 'N/A')})")
+      col2.metric(
+          "Class / Role",
+          f"{p_data.get('Class', 'N/A')} ({p_data.get('Role', 'N/A')})",
+      )
       col3.metric("Faction", p_data.get("Faction", "N/A"))
 
       st.markdown("### Stat Line")
@@ -160,8 +163,10 @@ else:
 
     clans = sorted(df["Clan"].dropna().unique().tolist())
     c1, c2 = st.columns(2)
-    clan_a = c1.selectbox("Select Clan A:", clans, index=0 if "FUCT" in clans else 0)
-    clan_b = c2.selectbox("Select Clan B:", clans, index=1 if len(clans) > 1 else 0)
+    clan_a = c1.selectbox("Select Clan A:", clans, index=0 if clans else 0)
+    clan_b = c2.selectbox(
+        "Select Clan B:", clans, index=1 if len(clans) > 1 else 0
+    )
 
     if clan_a and clan_b:
       df_a = df[df["Clan"] == clan_a]
@@ -206,18 +211,19 @@ else:
           view_df["Player"].str.contains(search_query, case=False, na=False)
       ]
 
-    st.dataframe(
-        view_df[
-            [
-                "Faction",
-                "Clan",
-                "Player",
-                "Class",
-                "Role",
-                "Combat\nRating",
-                "Reso",
-                "Power\nIndex",
-            ]
-        ],
-        use_container_width=True,
-    )
+    # Display clean subset of master columns
+    cols_to_show = [
+        c
+        for c in [
+            "Faction",
+            "Clan",
+            "Player",
+            "Class",
+            "Role",
+            "Combat\nRating",
+            "Reso",
+            "Power\nIndex",
+        ]
+        if c in view_df.columns
+    ]
+    st.dataframe(view_df[cols_to_show], use_container_width=True)
